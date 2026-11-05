@@ -1,5 +1,7 @@
 # listenrr
 
+[![ci](https://github.com/carrion256/listenrr/actions/workflows/ci.yml/badge.svg)](https://github.com/carrion256/listenrr/actions/workflows/ci.yml)
+
 A central voice backend for Home Assistant. Cheap microphones stream raw audio to one server. The
 server does the wake word detection, picks the best microphone, captures the request, transcribes
 it, and hands the text to a Home Assistant Assist pipeline. The reply is played back on the speaker
