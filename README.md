@@ -91,6 +91,7 @@ wake word plus "stop" over a playing reply interrupts it before any transcript e
 | `config/satellite.example.yaml` | An ESPHome config for that board that uses the component |
 | `tablet/` | A small Android app that turns a tablet into a source with a speaker. Built with plain `javac` and the Android SDK, no Gradle |
 | `docs/protocol.md` | The wire format. Enough to write a source in any language |
+| `docs/home-assistant.md` | How a request goes through the Assist pipeline, the token, pipeline id, TTS and per-device playback |
 | `docs/deployment.md` | Running it for real: systemd, a container, where to put the ASR, measured wake word settings |
 | `docs/design/` | The original engineering notes and test records, kept for the reasoning |
 | `config/listenrr.toml.example` | Every config key, its default and which ones are required |
@@ -101,7 +102,7 @@ wake word plus "stop" over a playing reply interrupts it before any transcript e
 
 You need three things this repository does not provide:
 
-- A **Home Assistant** with an Assist pipeline, a long-lived access token and the pipeline id.
+- A **Home Assistant** with an Assist pipeline, a long-lived access token and the pipeline id. Setup is in [`docs/home-assistant.md`](docs/home-assistant.md).
 - A **Wyoming ASR** service reachable as `host:port`. This was developed against
   [`lmoe/wyoming-onnx-stt`](https://github.com/lmoe/wyoming-onnx-stt) running Parakeet TDT 0.6b-v3.
 - A **source**: an ESP32-S3 board with the firmware component, the Android app, or your own client.
@@ -233,6 +234,7 @@ you can tune offline.
 ## Documentation
 
 - [`docs/protocol.md`](docs/protocol.md): the source protocol
+- [`docs/home-assistant.md`](docs/home-assistant.md): Home Assistant, Assist pipeline and TTS setup
 - [`docs/deployment.md`](docs/deployment.md): deployment, ASR placement, wake word measurements
 - [`docs/design/CONTRACT-NOTES.md`](docs/design/CONTRACT-NOTES.md): frozen interfaces and why
 - [`docs/design/TEST-NOTES.md`](docs/design/TEST-NOTES.md): acceptance status and the tuning log
