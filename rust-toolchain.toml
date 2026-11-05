@@ -1,0 +1,4 @@
+[toolchain]
+# Plan R1: pin the toolchain because sherpa-onnx publishes no MSRV.
+# Inert when the host has no rustup (the Nix profile supplies rustc 1.99.0).
+channel = "1.99.0"

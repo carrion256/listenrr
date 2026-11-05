@@ -1,0 +1,316 @@
+# listenrr — example configuration (config surface as fixed by the original design plan, not
+# published; milestone S1.1).
+#
+# Copy to /etc/listenrr/listenrr.toml and edit. This file sets **every** key the typed
+# loader (`src/config.rs`) accepts, and every value shown is the contract's own default
+# except where a key has no default and must be supplied (marked REQUIRED). Keys with a
+# default can be omitted entirely; the comment says what happens if you do.
+#
+# All values are validated at startup by `Config::validate`, which reports every problem
+# at once, so a bad file fails fast with a readable message rather than misbehaving at
+# 3 a.m. Nothing here is checked for reachability (that is `listenrr replay`'s job).
+
+# ---------------------------------------------------------------------------
+# [server] — the uplink socket sources connect to, and who may connect.
+# This is the trust boundary: the socket drives HA intents under the HA token below.
+# ---------------------------------------------------------------------------
+[server]
+# REQUIRED. `host:port` to listen on. 0.0.0.0 so satellites on the LAN (and sources over
+# a VPN/overlay network) can reach it. Port must not be 0; `[::1]:10700` (bracketed IPv6) is also valid.
+listen = "0.0.0.0:10700"
+
+# Shared hello secret (requirement R11 of the original design plan, not published). When set, every hello must carry this exact `token`,
+# compared in constant time; a mismatch or an absent token closes the connection with a
+# warning throttled to 1/s per peer IP.
+# Default: unset — every hello is accepted and ONE LOUD WARNING is logged at startup.
+# That is the out-of-the-box convenience, not a secure mode; set this for a real install.
+# Satellites read the same value from ESPHome `!secret`, never a literal. If set, it must
+# not be blank.
+auth_token = "change-me-shared-secret"
+
+# Unknown `source_id`s (not named by any [[sources]] below) are closed and logged by
+# default. Set true to admit them as ad-hoc sources: they get a ring, counters and KWS,
+# but no group — no arbitration, no mute entity, no output fallback. Flip this only for
+# S7-style third-party sources.
+allow_unknown_sources = false
+
+# ---------------------------------------------------------------------------
+# [ha] — Home Assistant control plane (WebSocket + REST on the same base URL).
+# ---------------------------------------------------------------------------
+[ha]
+# REQUIRED. WebSocket base, also used for REST (`/api/tts_proxy/…` URLs come from here).
+# Home Assistant is not necessarily the voice host. The original design plan (not published) assumed
+# it ran on the same machine as the backend; in the one deployment where this has been run end to
+# end (2026-11-02) that was false — the backend was an LXC (192.168.1.30) and HA a separate VM
+# (192.168.1.20), and the backend host's own domain name did not resolve at all. Put the address HA
+# actually answers on.
+url = "ws://homeassistant.example.lan:8123"
+
+# REQUIRED. Long-lived access token for the user listenrr acts as. Scope it to what the
+# pipeline and media_player services need.
+token = "ha-long-lived-access-token"
+
+# REQUIRED. Assist pipeline id entered at the intent stage (`start_stage: intent`,
+# `end_stage: tts`). Find it in the HA UI under Settings → Voice assistants → Pipelines.
+pipeline_id = "01J9ZEXAMPLEPIPELINE"
+
+# URL the *satellites* use to fetch `/api/tts_proxy/…` — set this to the LAN address the
+# devices can actually reach, which is often not `url`.
+# Default: "" (empty) = satellites can reach `ha.url` directly.
+internal_url = "http://192.168.1.20:8123"
+
+# ---------------------------------------------------------------------------
+# [parakeet] — the Wyoming ASR service that turns captured audio into text.
+# ---------------------------------------------------------------------------
+[parakeet]
+# REQUIRED. `host:port` of the preferred Wyoming Parakeet service. Must parse as host:port
+# with a non-zero port.
+# Do not assume the ASR runs on the backend host. Measured 2026-11-02 on the reference deployment it
+# did not: ports 10200–10500 were closed on the backend host and on the Home Assistant VM, and the
+# backend host had no spare capacity for one. The tiers that were measured, with the RTF each
+# produced, are in docs/deployment.md ("The ASR: where it runs, and what it costs"); the preferred
+# tier there is a GPU on another box (asr.example.lan) and the fallback is a CPU container on the
+# server.
+addr = "127.0.0.1:10200"
+
+# Ordered fallbacks, tried only when `addr` fails.
+# Default: [] (omitted) = one tier and no failover: a dead ASR means a failed turn.
+# A refused connection costs nothing; a service that accepts the audio and stays silent is
+# given up on after `PROBE_TIMEOUT_MS` (2.5 s) and the next tier is tried; a tier that just
+# failed is left alone for 60 s so a busy GPU does not cost 2.5 s of dead air on every
+# command. The last tier that is NOT in cooldown always gets the full request timeout
+# instead, because a CPU tier taking 5 s with a long utterance is doing real work, not
+# failing — and a cooled tier sitting behind it must not cost the working tier that budget.
+# Every entry is validated exactly like `addr` — a typo here is a tier that will not be
+# there when you need it. Duplicate addresses are tried once.
+# Default: [] (empty).
+fallback_addrs = ["127.0.0.1:10201"]
+
+# ---------------------------------------------------------------------------
+# [kws] — keyword spotting (sherpa-onnx KeywordSpotter).
+# Thresholds are deliberately loose: recall is sacred, the verify gate rejects the
+# false accepts and writes them to clips/false_accept/ for you to tune against.
+# ---------------------------------------------------------------------------
+[kws]
+# REQUIRED. Model directory (encoder/decoder/joiner + tokens) or model bundle path.
+model = "/opt/listenrr/models/kws-zipformer"
+
+# REQUIRED. Tokenized keyword file: one keyword per line, spelled in the *model's own*
+# tokens (its tokens.txt), not in English. Matching is an exact token-sequence match, so a
+# spelling the model never emits simply never fires — silently, no error. "hey luna" is
+# `▁HE Y ▁ LU N A`; the intuitive `▁ HE Y ...` fires on nothing, because the model emits
+# ▁HE as one word-initial token. A measured file for the gigaspeech KWS bundle ships as
+# config/keywords.luna.txt (byte-identical to the one in production); sherpa-onnx's
+# text2token produces this form where it ships. Derivation and the measurement matrices:
+# docs/deployment.md ("The wake words").
+keywords_file = "/etc/listenrr/keywords.txt"
+
+# Global spotter threshold, must be finite and in (0, 1].
+# Default: 0.25. Raise it when false accepts are frequent; lower it when misses are.
+threshold = 0.25
+
+# Per-keyword boosts, e.g. a keyword that under-triggers. Values must be positive and
+# finite.
+# Default: {} (empty) = no boosts.
+boosts = { luna = 2.0, "hey luna" = 1.5 }
+
+# The verify gate: the words that must appear in the ASR transcript for a spotter hit to
+# count as a real wake. The spotter proposes, the transcript disposes. Each entry is ONE
+# lowercase word; the possessive ("luna's") is accepted automatically. List every spelling
+# your ASR actually produces for your wake word, not just the intended one: ASR hears
+# "luna" as lunar/loona/lunas often enough that those are in the default.
+# Changing the wake word means changing this AND the keywords file, for example
+# wake_words = ["computer"] with a keywords file for "computer".
+# Default: ["luna", "lunar", "loona", "lunas"].
+wake_words = ["luna", "lunar", "loona", "lunas"]
+
+# Optional second keyword file for the STOP lane: a short "luna stop" keyword set that
+# runs against the audio played during a reply, so the wake word can interrupt a
+# speaking assistant before the transcript exists (docs/protocol.md; the stop-command design
+# itself is the original design plan, not published).
+# Default: unset = no keyword-based stop; the transcript phrases in
+# `capture.stop_phrases` still stop a conversation. Leave this unset until the replay
+# gate that design specifies (its step 7) passes: a stop keyword that fires on the
+# assistant's own voice hangs up on every answer.
+#stop_keywords_file = "/etc/listenrr/keywords.stop.txt"
+
+# Spotter threshold for `stop_keywords_file` only. Must be finite and in (0, 1].
+# Default: unset = use `threshold` above. Set it only if the stop keywords need a
+# different sensitivity from the wake keywords (they usually do: false accepts here are
+# far more costly than false accepts on the wake word).
+#stop_threshold = 0.4
+
+# ---------------------------------------------------------------------------
+# [capture] — arbitration, endpointing and follow-up windows.
+# The whole block is optional: omitting it entirely gives exactly the values below
+# (`Capture::default()`). Units are in the key name; every window must be > 0.
+# ---------------------------------------------------------------------------
+[capture]
+# Cross-source collection window opened by the FIRST wake in an idle group: other sources
+# in the same group may still enter the same arbitration and the winner is chosen by SNR.
+# Default: 250.
+arbitration_window_ms = 250
+
+# Trailing silence that ends an utterance. The main tuning knob (see `listenrr replay`'s
+# utterance-end margin instrument): too low truncates, too high adds latency and TV bleed.
+# Default: 700.
+trailing_silence_ms = 700
+
+# Hard cap on a single utterance; equals the ring depth (hard_cap_s × 16000 samples =
+# 240 000 at the default). Also bounds preroll_ms and min_utterance_ms.
+# Default: 15.
+hard_cap_s = 15
+
+# Backwards padding used when the VAD pass finds no speech onset before the keyword
+# (the S3.1 fallback): utterance starts at kw_start − preroll_ms. Must be ≤ hard_cap_s×1000.
+# Default: 300.
+preroll_ms = 300
+
+# Follow-up window after `playback_done`: the winner can keep talking without repeating
+# the wake word, on the same conversation_id. Shorten it if the TV is being heard.
+# Default: 6.
+followup_s = 6
+
+# Give up on a Speaking session that never reported `playback_done` (the clip sidecar
+# records which of the two ended it, because the two need different tuning).
+# Default: 30.
+speaking_timeout_s = 30
+
+# Length of the noise estimate taken *before* the keyword span, used for the SNR that
+# picks the group winner.
+# Default: 2.
+noise_window_s = 2
+
+# Floor for the shrunk noise window. When the pre-keyword window contains speech it is
+# shrunk toward the keyword, and this many milliseconds are kept — taken from the EARLIEST
+# part of the window, i.e. the audio farthest from the span and least likely to be the
+# utterance itself. Must be > 0 and ≤ noise_window_s × 1000.
+# Default: 250.
+noise_floor_ms = 250
+
+# Minimum speech length accepted as a follow-up utterance; rejects coughs and one-syllable
+# bleed. Must be ≤ hard_cap_s × 1000.
+# Default: 0 = the check is disabled.
+min_utterance_ms = 0
+
+# Silero VAD model used for the backwards pass and live endpointing.
+# Default: unset = use the [kws] model directory, where the sherpa-onnx bundle ships the
+# VAD model. Set this only if your VAD model lives elsewhere.
+vad_model = "/opt/listenrr/models/kws-zipformer/silero_vad.onnx"
+
+# Phrases that end a voice conversation — and any follow-up window — immediately when
+# heard in an utterance's transcript. Matching is a bare-word match on the transcript
+# text, so the whole utterance must be the phrase (a "stop" inside "stop the music" is
+# a command for Home Assistant, not an interrupt).
+# Every entry must already be in normalised form — lowercase, no leading/trailing
+# punctuation, single spaces — or startup is refused and the entry is named.
+# Default: ["stop"]. Note the behaviour change: a spoken bare "stop" now ends the
+# session instead of being forwarded to Home Assistant as an intent.
+stop_phrases = ["stop"]
+
+# ---------------------------------------------------------------------------
+# [clips] — evidence retention. Captured audio stays on the backend host (default) or the
+# machine that runs the retention sweep.
+# ---------------------------------------------------------------------------
+[clips]
+# REQUIRED. Root directory for per-trigger clips, plus the `false_accept/` and `missed/`
+# subdirectories (a `save_buffer` press writes the source's previous 10 s to `missed/`).
+# Each `.wav` gets a `.wav.json` sidecar with the transcript, candidates, SNRs, winner,
+# verify result, stage latencies and how the session ended.
+dir = "/var/lib/listenrr/clips"
+
+# Days of clips kept by the daily retention sweep. Must be > 0 (0 would delete everything).
+# Default: 30.
+retention_days = 30
+
+# ---------------------------------------------------------------------------
+# [[groups]] — optional group declarations: one group = one session = one winner.
+#
+# Omit this whole table for a single-room setup: group names are then taken as-is from
+# sources[].group. When ANY group is declared, however, every sources[].group MUST name a
+# declared group here — that is the typo'd-room guard, so the two tables must stay in
+# step. The output_* fields are the fallback used for members that have no ha_entity /
+# device_id of their own.
+# ---------------------------------------------------------------------------
+[[groups]]
+name = "living"
+# Fallback media_player entity for group members with no `ha_entity`.
+output_entity = "media_player.living_room_speaker"
+# Fallback HA device_id for group members with no `device_id`.
+output_device_id = "aa:bb:cc:dd:ee:01"
+
+[[groups]]
+name = "study"
+output_entity = "media_player.study_desk_speaker"
+output_device_id = "aa:bb:cc:dd:ee:02"
+
+[[groups]]
+name = "office"
+
+# ---------------------------------------------------------------------------
+# [[sources]] — one entry per device that may connect.
+#
+# `id` is matched against hello.source_id; unknown ids are rejected unless
+# server.allow_unknown_sources is set. id, room and group must all be non-empty and ids
+# must be unique. `has_speaker` defaults TRUE and `has_aec` defaults false, so a device
+# that cannot actually talk must say so (below), or the backend will aim TTS at it.
+# ---------------------------------------------------------------------------
+
+# (1) A real satellite with a speaker: full output path, and a mute entity so the room
+# can be silenced from HA. Any other physical button on it reports as a generic `button`
+# event; its "for you" button reports `save_buffer`.
+[[sources]]
+id = "living-sat"
+room = "living"
+group = "living"
+# HA device id passed to assist_pipeline/run so the answer is attributed to this device.
+device_id = "aa:bb:cc:dd:ee:01"
+# media_player entity used for TTS playback (media_player.play_media, announce: true).
+ha_entity = "media_player.living_room_satellite"
+# Entity whose state mutes (suppresses) this source: it keeps streaming into its ring but
+# its wakes are ignored. Read-only subscription; listenrr never writes it.
+mute_entity = "switch.living_room_mute"
+has_speaker = true
+has_aec = true
+
+# (2) A speaker-less mic-only satellite in the same room group: it can hear but cannot
+# talk, so output is routed to the fallback device instead of its own. `ha_entity` is left
+# out deliberately — the group's output_entity/output_device_id take over.
+[[sources]]
+id = "hallway-mic"
+room = "hallway"
+group = "living"
+has_speaker = false
+has_aec = false
+# Device used for this non-satellite (no-speaker) member of the group.
+fallback_device_id = "aa:bb:cc:dd:ee:01"
+
+# (3) A non-ESPHome source: a Raspberry Pi with a USB mic running the operator's own TCP
+# client (docs/protocol.md), in its own room/group so it never competes with the
+# living-room satellites for a session. It has no HA device and no media_player of its
+# own, so all output goes through the group's fallback. Nothing in the config says "this
+# is not ESPHome" — there is no protocol/kind key; what makes it non-satellite is that it
+# brings no speaker capability and declares no HA device or entity of its own.
+[[sources]]
+id = "study-pi"
+room = "study"
+group = "study"
+has_speaker = false
+has_aec = false
+fallback_device_id = "aa:bb:cc:dd:ee:02"
+
+# (4) An Android tablet running the listenrr tablet app (tablet/). It has a speaker but NO
+# Home Assistant `media_player`, so `playback = "source"` makes the backend send it a `play`
+# control with the reply's URL and the app plays it itself, reporting `playback_done` when it
+# ends or fails (docs/protocol.md section 8). `ha_entity` is not needed for this route.
+# Default for `playback`: "ha" (Home Assistant plays it on `ha_entity`). A `source` entry with
+# has_speaker = false is refused at startup: there would be nothing to play it on.
+# OPERATOR RULE: `playback = "source"` is for Android tablets only. A non-tablet board set
+# to it disconnects on the first stop — it cannot answer the `stop` control it is sent.
+[[sources]]
+id = "office"
+room = "office"
+group = "office"
+has_speaker = true
+has_aec = false
+playback = "source"

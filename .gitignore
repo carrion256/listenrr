@@ -1,0 +1,43 @@
+# Rust build artifacts
+/target
+/target-*/
+# Built binary (cargo writes ./listenrr for the bin target)
+/listenrr
+
+# Downloaded model weights — scripts/get_models.sh fetches these; never commit
+/models/
+
+# Captured audio from clips/ and replay dumps
+*.wav
+!tests/fixtures/*.wav
+# The wake earcon is embedded in the satellite firmware at compile time, so it is source, not a
+# capture: tracked so every board built from a commit carries the same chime.
+!config/sounds/ack.wav
+*.wav.json
+
+# ESPHome build output
+firmware/.esphome/
+firmware/build/
+config/.esphome/
+config/build/
+# Local secrets for compiling the example satellite (never commit)
+config/secrets.yaml
+# The esphome CLI writes this itself on every compile; redundant with these rules
+config/.gitignore
+# Local site config: copy the .example files and keep your own versions out of git
+config/satellites.toml
+config/listenrr.toml
+.envrc
+
+# Scratch
+.env
+*.log
+
+# Python bytecode from the ESPHome component's codegen module (ESPHome imports it)
+__pycache__/
+*.py[cod]
+
+# devenv / direnv state
+.devenv/
+.direnv/
+devenv.local.nix

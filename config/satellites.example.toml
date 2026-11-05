@@ -1,0 +1,88 @@
+# Example fleet list. Copy this file to config/satellites.toml and edit that — the recipes read
+# config/satellites.toml, never this example.
+#
+# The satellites running config/satellite.example.yaml (the Waveshare ESP32-S3-AUDIO
+# reference board). `just fw-ota <name>` / `just fw-ota-all` read config/satellites.toml: each
+# entry becomes the ESPHome substitutions for one board, and `host` is where the OTA upload goes.
+#
+# A board still running the vendor package is listed with `usb_first = true`: `just fw-usb <name>`
+# does its first flash over USB (plug in exactly one board), and `fw-ota` / `fw-ota-all` refuse and
+# skip it. After that first flash succeeds, delete its `usb_first` line; every later flash is OTA.
+# The equivalent by hand is
+# `esphome run config/satellite.example.yaml --device /dev/ttyACM0` with the same substitutions.
+#
+# No secrets: wifi, api key, OTA password and the hello token stay in config/secrets.yaml.
+#
+# `source_id` must match a [[sources]].id in the backend's listenrr.toml, or the backend
+# closes the connection at hello. `host` can be an IP or an mDNS name; an IP should be
+# reserved on the router, because a renewed lease makes the next OTA fail to connect.
+#
+# The addresses below are placeholders for a LAN (192.168.1.0/24) whose gateway reserves them for
+# the boards.
+
+backend_host = "192.168.1.30"   # the listenrr backend host
+backend_port = "10700"
+
+[[satellites]]
+name = "bedroom-sat"
+friendly_name = "Bedroom satellite"
+source_id = "bedroom"
+room = "bedroom"
+host = "192.168.1.101"
+
+[[satellites]]
+name = "kitchen-sat"
+friendly_name = "Kitchen satellite"
+source_id = "kitchen"
+room = "kitchen"
+host = "192.168.1.102"
+
+[[satellites]]
+name = "garage-sat"
+friendly_name = "Garage satellite"
+source_id = "garage"
+room = "garage"
+host = "192.168.1.103"
+
+[[satellites]]
+name = "living-room-sat"
+friendly_name = "Living room satellite"
+source_id = "living-room"
+room = "living-room"
+host = "192.168.1.104"
+
+# A board whose room is not decided yet. When it is: rename name, friendly_name, source_id and
+# room here, rename the [[sources]] entry on the backend to match, and OTA; Home Assistant will
+# see it as a new device. `host` is the mDNS name until the board has a reserved address.
+[[satellites]]
+name = "spare-sat"
+friendly_name = "Spare satellite"
+source_id = "spare"
+room = "spare"
+host = "spare-sat.local"
+
+# A board that has never been flashed with this firmware: `just fw-ota unassigned-sat` refuses it
+# until `just fw-usb unassigned-sat` has succeeded once and the `usb_first` line below is removed.
+[[satellites]]
+name = "unassigned-sat"
+friendly_name = "Unassigned satellite"
+source_id = "unassigned"
+room = "unassigned"
+host = "unassigned-sat.local"
+usb_first = true
+
+# Android tablets running the listenrr tablet app (tablet/). Deliberately NOT [[satellites]]: the
+# firmware recipes (fw-ota, fw-ota-all, fw-usb) iterate that table and would try to flash an
+# ESPHome image onto a tablet. `host` is the tablet's address; the adb port changes every time
+# Wireless debugging is switched on, so the tablet recipes find the live adb serial by this host.
+[[tablets]]
+name = "office-tab"
+source_id = "office"
+room = "office"
+host = "192.168.1.121"
+
+[[tablets]]
+name = "hallway-tab"
+source_id = "hallway"
+room = "hallway"
+host = "192.168.1.122"

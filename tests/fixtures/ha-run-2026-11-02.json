@@ -1,0 +1,97 @@
+{
+ "pipeline": "01j9zexamplepipeline00000a",
+ "start_stage": "intent",
+ "end_stage": "tts",
+ "input": {
+  "text": "what is the weather"
+ },
+ "ha_version": "2026.9.2",
+ "events": [
+  {
+   "type": "run-start",
+   "data": {
+    "pipeline": "01j9zexamplepipeline00000a",
+    "language": "en",
+    "conversation_id": "01M6EZJAF99DDCS5HQTMRS03EP",
+    "runner_data": {
+     "stt_binary_handler_id": null,
+     "timeout": 300
+    },
+    "tts_output": {
+     "token": "0W0_xKCRLu3ZcEM0qDSrNg.mp3",
+     "url": "/api/tts_proxy/0W0_xKCRLu3ZcEM0qDSrNg.mp3",
+     "mime_type": "audio/mpeg",
+     "stream_response": false
+    }
+   },
+   "timestamp": "2026-11-02T20:35:14.538411+00:00"
+  },
+  {
+   "type": "intent-start",
+   "data": {
+    "engine": "conversation.luna",
+    "language": "en",
+    "intent_input": "what is the weather",
+    "conversation_id": "01M6EZJAF99DDCS5HQTMRS03EP",
+    "device_id": null,
+    "satellite_id": null,
+    "prefer_local_intents": false
+   },
+   "timestamp": "2026-11-02T20:35:14.538468+00:00"
+  },
+  {
+   "type": "intent-end",
+   "data": {
+    "processed_locally": false,
+    "intent_output": {
+     "response": {
+      "speech": {
+       "plain": {
+        "speech": "It's clear and calm out, seven point six degrees with a light breeze from the north. A bit chilly, so a jacket's worth it if you're heading out.",
+        "extra_data": null
+       }
+      },
+      "card": {},
+      "language": "en",
+      "response_type": "action_done",
+      "data": {
+       "success": [],
+       "failed": []
+      }
+     },
+     "conversation_id": "01M6EZJAF99DDCS5HQTMRS03EP",
+     "continue_conversation": false
+    }
+   },
+   "timestamp": "2026-11-02T20:35:19.290802+00:00"
+  },
+  {
+   "type": "tts-start",
+   "data": {
+    "engine": "tts.elevenlabs_custom_tts",
+    "language": "en",
+    "voice": "luna",
+    "tts_input": "It's clear and calm out, seven point six degrees with a light breeze from the north. A bit chilly, so a jacket's worth it if you're heading out.",
+    "acknowledge_override": false
+   },
+   "timestamp": "2026-11-02T20:35:19.290878+00:00"
+  },
+  {
+   "type": "tts-end",
+   "data": {
+    "tts_output": {
+     "media_id": "media-source://tts/-stream-/0W0_xKCRLu3ZcEM0qDSrNg.mp3",
+     "token": "0W0_xKCRLu3ZcEM0qDSrNg.mp3",
+     "url": "/api/tts_proxy/0W0_xKCRLu3ZcEM0qDSrNg.mp3",
+     "mime_type": "audio/mpeg"
+    }
+   },
+   "timestamp": "2026-11-02T20:35:19.294236+00:00"
+  },
+  {
+   "type": "run-end",
+   "data": null,
+   "timestamp": "2026-11-02T20:35:19.294348+00:00"
+  }
+ ]
+}

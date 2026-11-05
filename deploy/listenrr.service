@@ -1,0 +1,146 @@
+# listenrr.service — system unit for the Luna voice backend.
+#
+# This unit was qualified by installing it on a Debian 12 LXC: `systemd-analyze verify` exits 0
+# with no diagnostics, `systemctl enable --now` yields enabled + active, and the process binds
+# server.listen. What it does not supply by itself is a real Home Assistant credential or an ASR
+# endpoint, so the HA call and the verify stage fail downstream until those exist — see
+# docs/deployment.md for the whole picture and the remaining operator steps. Re-check after editing:
+#
+#     systemd-analyze verify deploy/listenrr.service
+#
+# HISTORY: this file's first install found that it had no [Install] section, so
+# `systemctl enable` refused it and a host reboot would have left voice down. That is fixed
+# below, and the deployment notes record why the directive is load-bearing.
+#
+# PREREQUISITES — this unit creates none of them. Every path below is the path
+# config/listenrr.toml.example documents; nothing here installs a binary or fetches a
+# model. Produce them first:
+#
+#   1. The binary: `cargo build --release`, then install target/release/listenrr at the
+#      ExecStart path. (Build commands are docs/design/CONTRACT-NOTES.md §5's; the install location
+#      is a deployment choice — docs/design/CONTRACT-NOTES.md §1, and there is no install target.)
+#   2. The config: copy config/listenrr.toml.example to the --config path below and
+#      edit it. It carries ha.token (a long-lived HA credential), so give it an owner
+#      and mode that keep it off other accounts (root:listenrr 0640 is the obvious
+#      reading of "the account in User= below may read it, no one else").
+#   3. The models, with the script's own usage (its --help, not an invented command):
+#
+#          ./scripts/get_models.sh --dest /opt/listenrr/models
+#
+#      then point [kws] model / [kws] keywords_file / [capture] vad_model at that tree
+#      (the script prints the exact snippet), and create the keyword list it tells you
+#      to create with sherpa-onnx-text2token.
+#   4. The service account: nothing in this repository creates it. Create it yourself
+#      (system account, no home, no shell) or change User=/Group= to an account you
+#      already have that can read 2 and 3.
+#
+# WHY A SYSTEM UNIT AND NOT A USER UNIT: the process needs no root — it binds whatever
+# server.listen says (the documented default, 0.0.0.0:10700, is unprivileged), opens no
+# device, and never spawns a helper — but the layout the example config documents is
+# system-wide (/etc/listenrr/listenrr.toml, /opt/listenrr/models,
+# /var/lib/listenrr/clips), and those are not a user's paths. A user unit would also
+# die with the session unless the operator enabled lingering, which is a second
+# prerequisite for no benefit the code asks for.
+
+[Unit]
+Description=Luna voice backend: wake detection, capture, verify gate and HA Assist entry
+# The process dials ha.url (WebSocket), parakeet.addr and parakeet.fallback_addrs
+# (Wyoming TCP) by hostname at startup. None of them is fatal if it is down — ha.rs owns a
+# reconnect loop, a failed ASR tier falls over to the next one, and main.rs logs
+# "mute subscription ended" as a warning, not an error — but waiting for the network
+# avoids a startup storm of retries against a name that cannot resolve yet.
+Wants=network-online.target
+After=network-online.target
+
+# No WatchdogSec= and no Type=notify: nothing in src/ reads NOTIFY_SOCKET, so there is
+# no sd_notify integration to feed. Type=simple (the default) is the only honest type.
+
+[Service]
+# Type=simple is the default and is left implicit.
+# The binary path is the deployment decision, not a source fact — src/main.rs knows only
+# its own argv. Adjust both ExecStart lines together if you install elsewhere.
+ExecStart=/opt/listenrr/listenrr run --config /etc/listenrr/listenrr.toml
+# src/main.rs documents the `health` subcommand as exactly this: "a systemd
+# ExecStartPre/watchdog hook". It parses the file, runs Config::validate (all problems
+# at once, so one edit fixes them) and create_dir_all's clips.dir, so it also creates
+# the clip tree under the right uid before the service starts. It opens no socket and
+# contacts no service, so a failed HA or Parakeet does not block the start.
+ExecStartPre=/opt/listenrr/listenrr health --config /etc/listenrr/listenrr.toml
+
+# Not strictly needed — --config is passed absolute above, so the CWD-relative default
+# (src/main.rs: DEFAULT_CONFIG = "config/listenrr.toml") is never consulted. Set anyway
+# so that any relative path left in the config resolves somewhere the operator controls
+# rather than /, which is where a system unit otherwise starts.
+WorkingDirectory=/var/lib/listenrr
+
+# Housekeeping user. Nothing in this repository creates this account (see header 4).
+# The process needs no privileges: TCP listen + outbound TCP + file reads, no device,
+# no setuid helper.
+User=listenrr
+Group=listenrr
+
+# The only directory the service writes to. clips.dir in config/listenrr.toml.example is
+# /var/lib/listenrr/clips, and clip + sidecar writes, the `save_buffer` missed-wake
+# dump and the daily retention sweep all live under clips::*. StateDirectory= creates it
+# owned by User= and keeps it writable under ProtectSystem=strict; the `health`
+# ExecStartPre creates the clips/ subtree inside it. If you change clips.dir, change
+# StateDirectory= to contain it.
+StateDirectory=listenrr
+
+# Reads are config + models; the only writes this repository makes are the clip tree above
+# (`hound` writes each clip straight into clips.dir, and `tempfile` is a dev-dependency that
+# appears only under #[cfg(test)]). The open question here is closed: on 2026-11-02 the service
+# started under `ProtectSystem=strict` on a Debian 12 LXC and loaded the KWS encoder/decoder/joiner
+# and the Silero VAD from /opt/listenrr/models without a single write outside StateDirectory=,
+# so the vendored ONNX Runtime needs no writable path at model-load time. If a future model or
+# runtime version changes that, this is still the first directive to test by removing.
+ProtectSystem=strict
+# No $HOME access: no code path reads a home directory, and the documented config and
+# model paths are absolute. Drop this if you keep your models under a home directory.
+ProtectHome=true
+# Nothing in src/ writes a temporary file — `tempfile` appears only under #[cfg(test)]
+# (it is a dev-dependency), and hound writes each clip straight into the clip directory.
+PrivateTmp=true
+# Audio arrives over a TCP socket from the satellites; this process opens no sound or
+# input device (Cargo.toml pulls no ALSA/cpal/rodio dependency).
+PrivateDevices=true
+# No privilege escalation anywhere in the process: model loading is a read-only ONNX
+# file open, and nothing spawns a subprocess.
+NoNewPrivileges=true
+# AF_INET/AF_INET6: the ingest listener and the two outbound clients (HA WebSocket,
+# Wyoming TCP). AF_UNIX: kept for glibc name resolution, which ha.url and parakeet.addr
+# depend on being hostnames.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Captured user audio. The default 0022 would make every clip world-readable.
+UMask=0027
+# Journal identity for `journalctl -u` on the JSON lines main.rs writes to stderr.
+SyslogIdentifier=listenrr
+
+# Restart is safe by design: the contract's reconnect invariant and src/main.rs's own header both say
+# satellites reconnect with backoff and need no reflash, and downtime leaves HA healthy
+# with voice simply unavailable. So a crash is recoverable by restarting, and an
+# intentional `systemctl stop` is not restarted.
+Restart=on-failure
+RestartSec=2
+
+# Stop path: run_service's graceful arm — stop ingest, let in-flight sources drain — is
+# wired to Ctrl-C (tokio::signal::ctrl_c), NOT to SIGTERM. systemd's default SIGTERM
+# would still terminate the process, via the default signal disposition, without ever
+# entering that arm. Asking for SIGINT is what makes `systemctl stop` take the drain.
+KillSignal=SIGINT
+# The Ctrl-C arm leaves per-connection tasks running if a satellite is mid-drain
+# (src/main.rs: "the process just exits: the thread is detached"), so the backstop is
+# the operator's, not the code's.
+TimeoutStopSec=30
+
+# main.rs builds its EnvFilter with try_from_default_env() and an `info` fallback, so
+# this is the default spelled out; raise it here rather than editing the unit's args.
+Environment=RUST_LOG=info
+
+# Without an [Install] section `systemctl enable` refuses the unit — "no installation
+# config" — so a reboot would leave voice down until someone started it by hand.
+# Found by actually installing this file on the target: enable printed the refusal and
+# created no symlink. Verified fixed: enable + restart yields enabled=enabled,
+# active=active and a socket on server.listen.
+[Install]
+WantedBy=multi-user.target
