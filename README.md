@@ -21,19 +21,19 @@ Most DIY voice satellites run the wake word model on the device. That works, but
 whatever the device firmware can run. Here the satellite is a dumb microphone and the model runs on a
 machine that has room for a better one.
 
-- **Arbitrary wake words.** The keyword spotter is open vocabulary. A wake word is a line of tokens in
-  `config/keywords.luna.txt` plus the spellings your ASR produces for it in `kws.wake_words`. No
-  training run, no sample collection, no model file per phrase. Several keywords can run at once,
-  each with its own boost.
-- **One place to tune.** Thresholds, boosts and the verify gate live in one config file. Changing them
-  does not mean reflashing nine boards.
-- **Whole-house arbitration.** Every source in a room group streams into its own ring buffer. When two
-  microphones hear the same "luna", the backend compares their signal to noise ratio and one wins. The
-  other stays quiet.
-- **Evidence for every decision.** Each trigger leaves a WAV and a JSON sidecar with the transcript,
-  scores, winner and stage timings. A false accept becomes a test fixture you can replay offline.
-- **Dumb satellites are cheap satellites.** The firmware streams PCM and plays audio. It has no
-  models, no wake word logic and very little to go wrong.
+- Any wake word. The keyword spotter is open vocabulary, so a wake word is a line of tokens in
+  `config/keywords.luna.txt` plus the spellings your ASR produces for it in `kws.wake_words`. There
+  is no training run, no sample collection and no model file per phrase. Several keywords can run at
+  once, each with its own boost.
+- One place to tune. Thresholds, boosts and the verify gate live in one config file, so changing
+  them never means reflashing a board.
+- Whole-house arbitration. Every source in a room group streams into its own ring buffer. When two
+  microphones hear the same "luna", the backend compares their signal to noise ratio and one wins.
+  The other stays quiet.
+- A record of every trigger. Each one leaves a WAV and a JSON sidecar with the transcript, scores,
+  winner and stage timings. A false accept becomes a test fixture you can replay offline.
+- Cheap satellites. The firmware streams PCM and plays audio. It has no models and no wake word
+  logic, so there is very little on the device to go wrong.
 
 The cost: audio leaves the room, over your LAN, to your server. listenrr itself talks to no cloud
 service, and the wake word and speech to text run on your own hardware. What your conversation agent
@@ -49,8 +49,7 @@ Research. The Assist pipeline's conversation agent is
 [API server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server) of a Hermes profile, so what you say
 is answered by an agent with its own persona, memory and tools, not by Home Assistant's built-in
 intent matcher. The voice is a custom ElevenLabs voice (the pipeline's TTS entity), so the
-assistant speaks in a voice you choose instead of a stock one. The wake word, the agent and the
-voice are all yours to swap.
+assistant speaks in a voice you choose instead of a stock one.
 
 ```
 satellite audio -> listenrr (wake, capture, ASR) -> HA Assist (intent stage) -> Hermes -> ElevenLabs -> speaker
@@ -179,23 +178,23 @@ sherpa-onnx produces this form:
 sherpa-onnx-text2token --tokens models/kws/<bundle>/tokens.txt 'computer'
 ```
 
-Matching is an exact token sequence. A spelling the model never emits fires on nothing, silently. In
-this project's tests `▁ HE Y ▁ LU N A` (a space after the first marker) never fired, because the model
-produces `▁HE` as a single token, while `▁HE Y ▁ LU N A` worked. Test a new word against recordings
-before you trust it: replay them and look at what fires.
+Matching is an exact token sequence, so a spelling the model never emits fires on nothing, with no
+error. In this project's tests `▁ HE Y ▁ LU N A` (a space after the first marker) never fired,
+because the model produces `▁HE` as a single token, while `▁HE Y ▁ LU N A` worked. Check a new word
+against recordings before you trust it. Replay them and look at what fires:
 
-Then tell the verify gate what the transcript will say. In `[kws]`:
+```sh
+./target/release/listenrr replay --config /etc/listenrr/listenrr.toml clips/
+```
+
+The verify gate also needs to know what the transcript will say. In `[kws]`:
 
 ```toml
 wake_words = ["computer"]   # every spelling your ASR may produce; "computer's" is accepted automatically
 ```
 
-The default is `["luna", "lunar", "loona", "lunas"]`. Without this the gate rejects every trigger
-whose transcript lacks one of those words.
-
-```sh
-./target/release/listenrr replay --config /etc/listenrr/listenrr.toml clips/
-```
+The default is `["luna", "lunar", "loona", "lunas"]`. If your wake word is not in that list, the
+gate rejects every trigger.
 
 Thresholds default to loose on purpose. A false accept is cheap because the verify gate drops it and
 keeps the clip. A miss is the failure you notice. `docs/deployment.md` has the keyword set and
@@ -240,7 +239,7 @@ you can tune offline.
 - Whole-house latency from "luna" to the first audible word was not measured systematically, and
   there is no accuracy benchmark for the wake word on diverse speakers or noisy rooms. The model is
   English only.
-- Wake detection on one dialect, in one house, is evidence about that house.
+- Everything above was measured in one house.
 
 ## Known limits
 
@@ -251,8 +250,8 @@ you can tune offline.
   warning at startup.
 - Clips are household audio stored on disk for 30 days by default. Decide where that lives and
   whether it is backed up.
-- The deploy recipes in the `justfile` assume a Proxmox container reached over SSH. They are
-  worked examples, not a general installer.
+- The deploy recipes in the `justfile` assume a Proxmox container reached over SSH. They are worked
+  examples for that one setup.
 
 ## Documentation
 

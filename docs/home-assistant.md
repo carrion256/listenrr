@@ -28,27 +28,26 @@ sequenceDiagram
     S-->>L: playback_done
 ```
 
-- **Intent stage, not STT.** listenrr starts the pipeline with `start_stage: "intent"` and
-  `end_stage: "tts"`, and sends the transcript as `input.text`. Home Assistant's own speech to
-  text is never used, so the Assist pipeline's STT setting does not matter to listenrr.
-- **The conversation agent is yours.** Whatever the pipeline names as its conversation agent
-  answers: Home Assistant's built-in intents, an LLM integration such as OpenAI, or a local model.
-  The conversation id is the listenrr session id, so a follow-up turn continues the same
-  conversation without the wake word.
-- **The TTS engine is yours.** The pipeline's TTS stage produces the audio, and Home Assistant
-  returns a `/api/tts_proxy/...` URL for it. Any TTS integration works, including one with a
-  custom voice. The run this project was developed against used an ElevenLabs-backed TTS entity
-  with a custom voice, and its audio came back as MP3
-  (`audio/mpeg`). listenrr takes the format from the `mime_type` in `tts-end` and understands MP3 and
-  FLAC. See [`tests/fixtures/ha-run-2026-11-02.json`](../tests/fixtures/ha-run-2026-11-02.json) for
-  the exact events Home Assistant 2026.9.2 sent.
-- **Which device is talking.** The run carries the source's Home Assistant `device_id`, so the
-  conversation agent can resolve "the lights in here" to the right area. Set `device_id` on the
-  `[[sources]]` entry (or `fallback_device_id` for a source with no device of its own).
+- listenrr starts the pipeline at the intent stage (`start_stage: "intent"`, `end_stage: "tts"`)
+  and sends the transcript as `input.text`. Home Assistant's own speech to text is never used, so
+  the pipeline's STT setting does not matter to listenrr.
+- Whatever the pipeline names as its conversation agent answers: Home Assistant's built-in
+  intents, an LLM integration such as OpenAI, or a local model. The conversation id is the
+  listenrr session id, so a follow-up turn continues the same conversation without the wake word.
+- The pipeline's TTS stage produces the audio, and Home Assistant returns a `/api/tts_proxy/...`
+  URL for it. Any TTS integration works, including one with a custom voice. The run this project
+  was developed against used an ElevenLabs TTS entity with a custom voice, and its audio came back
+  as MP3 (`audio/mpeg`). listenrr takes the format from the `mime_type` in `tts-end` and
+  understands MP3 and FLAC. See
+  [`tests/fixtures/ha-run-2026-11-02.json`](../tests/fixtures/ha-run-2026-11-02.json) for the exact
+  events Home Assistant 2026.9.2 sent.
+- The run carries the source's Home Assistant `device_id`, so the conversation agent can resolve
+  "the lights in here" to the right area. Set `device_id` on the `[[sources]]` entry (or
+  `fallback_device_id` for a source with no device of its own).
 
 ## Using Hermes as the conversation agent
 
-This is how the project's own house runs. [Hermes Agent](https://github.com/NousResearch/hermes-agent) exposes an
+This is how the author's house runs. [Hermes Agent](https://github.com/NousResearch/hermes-agent) exposes an
 [OpenAI-compatible API server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server). The pipeline's
 conversation agent is [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) (a custom
 integration, MIT licensed) pointed at the endpoint of the Hermes profile that is the household
@@ -76,9 +75,9 @@ The author's agent options:
 | Functions | the integration's standard `execute_services` function, which lets the agent call Home Assistant services on entities exposed to it. Copy it from the integration's README |
 
 From then on, `assist_pipeline/run` from listenrr reaches Hermes with the transcript as the user
-message, and Hermes's reply is spoken. Because the agent keeps its own memory and tools, it can do
-more than Home Assistant's intents: answer questions, run tools and keep context between turns.
-The model Hermes uses is Hermes's own configuration and is invisible to listenrr.
+message, and Hermes's reply is spoken. Because the agent keeps its own memory and tools, it can
+answer questions and run tools, not only match Home Assistant intents, and it keeps context between
+turns. The model Hermes uses is Hermes's own configuration and is invisible to listenrr.
 
 Two practical notes:
 
@@ -127,9 +126,9 @@ The token sits in `listenrr.toml`. Keep that file `0640` and out of git.
 
 Each source in `[[sources]]` has one of two playback routes.
 
-**Home Assistant plays it (default).** Home Assistant has to see the satellite as a
-`media_player`. listenrr calls `media_player.play_media` on that entity with `announce: true`, so
-music ducks while the assistant speaks. Set the entity on the source:
+If Home Assistant plays the reply (the default), it has to see the satellite as a `media_player`.
+listenrr calls `media_player.play_media` on that entity with `announce: true`, so music ducks while
+the assistant speaks. Set the entity on the source:
 
 ```toml
 [[sources]]
@@ -144,9 +143,9 @@ For a board running the `luna_stream` firmware component, the entity is the `spe
 defined in [`config/satellite.example.yaml`](../config/satellite.example.yaml), which appears in
 Home Assistant once the ESPHome device is added.
 
-**The source plays it.** The Android tablet app has a speaker but no `media_player`. Set
-`playback = "source"` and listenrr sends it a `play` control with the audio URL. This route is for
-the tablet app only; a board running the firmware must stay on the default.
+If the source plays the reply, set `playback = "source"` and listenrr sends it a `play` control
+with the audio URL. The Android tablet app has a speaker but no `media_player`, so this route is
+for the tablet app only. A board running the firmware must stay on the default.
 
 A source with no speaker (a microphone only) uses its group's output instead:
 
