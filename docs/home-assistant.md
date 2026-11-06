@@ -36,8 +36,9 @@ sequenceDiagram
   The conversation id is the listenrr session id, so a follow-up turn continues the same
   conversation without the wake word.
 - **The TTS engine is yours.** The pipeline's TTS stage produces the audio, and Home Assistant
-  returns a `/api/tts_proxy/...` URL for it. Any TTS integration works. The run this project was
-  developed against used an ElevenLabs-backed TTS entity, and its audio came back as MP3
+  returns a `/api/tts_proxy/...` URL for it. Any TTS integration works, including one with a
+  custom voice. The run this project was developed against used an ElevenLabs-backed TTS entity
+  with a custom voice, and its audio came back as MP3
   (`audio/mpeg`). listenrr takes the format from the `mime_type` in `tts-end` and understands MP3 and
   FLAC. See [`tests/fixtures/ha-run-2026-11-02.json`](../tests/fixtures/ha-run-2026-11-02.json) for
   the exact events Home Assistant 2026.9.2 sent.
@@ -59,8 +60,8 @@ assistant.
 2. Install Extended OpenAI Conversation in Home Assistant and add a service. Give it Hermes's base
    URL (the `/v1` root) and that key as the API key.
 3. Add a conversation agent from that service and set it as the conversation agent of the pipeline
-   you give listenrr in `ha.pipeline_id`. Set the pipeline's TTS to the voice you want (the author
-   uses an ElevenLabs entity).
+   you give listenrr in `ha.pipeline_id`. Set the pipeline's TTS to the voice you want. The author
+   uses an ElevenLabs entity with a custom voice, so the assistant has its own voice.
 
 The author's agent options:
 

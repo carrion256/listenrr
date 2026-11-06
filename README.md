@@ -48,7 +48,9 @@ Research. The Assist pipeline's conversation agent is
 [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) in Home Assistant, pointed at the
 [API server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server) of a Hermes profile, so what you say
 is answered by an agent with its own persona, memory and tools, not by Home Assistant's built-in
-intent matcher. The voice is an ElevenLabs TTS entity in the same pipeline.
+intent matcher. The voice is a custom ElevenLabs voice (the pipeline's TTS entity), so the
+assistant speaks in a voice you choose instead of a stock one. The wake word, the agent and the
+voice are all yours to swap.
 
 ```
 satellite audio -> listenrr (wake, capture, ASR) -> HA Assist (intent stage) -> Hermes -> ElevenLabs -> speaker
