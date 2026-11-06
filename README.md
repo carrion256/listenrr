@@ -44,8 +44,9 @@ always-streaming microphone on your network, device-side wake words exist for a 
 ## What it runs in front of: Hermes
 
 In the house this was built for, the agent that answers is [Hermes Agent](https://github.com/NousResearch/hermes-agent) from Nous
-Research. The Assist pipeline's conversation agent is an OpenAI-compatible agent in Home Assistant
-that points at Hermes's [API server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server), so what you say
+Research. The Assist pipeline's conversation agent is
+[Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) in Home Assistant, pointed at the
+[API server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server) of a Hermes profile, so what you say
 is answered by an agent with its own persona, memory and tools, not by Home Assistant's built-in
 intent matcher. The voice is an ElevenLabs TTS entity in the same pipeline.
 

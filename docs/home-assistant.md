@@ -48,17 +48,31 @@ sequenceDiagram
 ## Using Hermes as the conversation agent
 
 This is how the project's own house runs. [Hermes Agent](https://github.com/NousResearch/hermes-agent) exposes an
-[OpenAI-compatible API server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server), and the
-pipeline's conversation agent is a Home Assistant agent pointed at that endpoint.
+[OpenAI-compatible API server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server). The pipeline's
+conversation agent is [Extended OpenAI Conversation](https://github.com/jekalmin/extended_openai_conversation) (a custom
+integration, MIT licensed) pointed at the endpoint of the Hermes profile that is the household
+assistant.
 
 1. Run Hermes with its API server enabled. It requires an API key and refuses to start the
    endpoint without one. Keep the endpoint on your LAN or behind a reverse proxy that limits who
    can reach it.
-2. In Home Assistant, add an OpenAI-compatible conversation agent and give it Hermes's base URL
-   (the `/v1` root) and that key. Use an integration that accepts a custom base URL.
-3. In **Settings, Voice assistants**, set that agent as the conversation agent of the pipeline you
-   give listenrr in `ha.pipeline_id`. Set the pipeline's TTS to the voice you want (the author uses
-   an ElevenLabs entity).
+2. Install Extended OpenAI Conversation in Home Assistant and add a service. Give it Hermes's base
+   URL (the `/v1` root) and that key as the API key.
+3. Add a conversation agent from that service and set it as the conversation agent of the pipeline
+   you give listenrr in `ha.pipeline_id`. Set the pipeline's TTS to the voice you want (the author
+   uses an ElevenLabs entity).
+
+The author's agent options:
+
+| Option | Value |
+|---|---|
+| Prompt template | `You are Luna, the household voice assistant for this Home Assistant. Answer in plain text only, one or two short sentences.` |
+| Chat model | any non-empty name. Hermes ignores the model a client sends and uses the model set in its own profile config |
+| Maximum tokens to return | 1024 |
+| Top P | 0.9 |
+| Temperature | 0.4 |
+| Maximum function calls per conversation | 12 |
+| Functions | the integration's standard `execute_services` function, which lets the agent call Home Assistant services on entities exposed to it. Copy it from the integration's README |
 
 From then on, `assist_pipeline/run` from listenrr reaches Hermes with the transcript as the user
 message, and Hermes's reply is spoken. Because the agent keeps its own memory and tools, it can do
@@ -67,8 +81,9 @@ The model Hermes uses is Hermes's own configuration and is invisible to listenrr
 
 Two practical notes:
 
-- Voice replies should be short. Put that in the agent's persona or system prompt, because a long
-  answer is a long wait before the TTS audio exists.
+- Voice replies should be short. The prompt above asks for one or two plain sentences for that
+  reason: a long answer is a long wait before the TTS audio exists, and markdown is read aloud by
+  the TTS.
 - An empty request is never sent. A bare wake word strips to nothing, and listenrr drops it before
   the pipeline so the agent never sees an empty message.
 
