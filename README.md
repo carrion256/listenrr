@@ -35,9 +35,27 @@ machine that has room for a better one.
 - **Dumb satellites are cheap satellites.** The firmware streams PCM and plays audio. It has no
   models, no wake word logic and very little to go wrong.
 
-The cost: audio leaves the room, over your LAN, to your server. Nothing here talks to a cloud service,
-but if you are not comfortable with an always-streaming microphone on your network, device-side wake
-words exist for a reason.
+The cost: audio leaves the room, over your LAN, to your server. listenrr itself talks to no cloud
+service, and the wake word and speech to text run on your own hardware. What your conversation agent
+and TTS do is up to them: a hosted model or voice (ElevenLabs, for example) receives text, such as
+your transcript or the reply, and never your microphone audio. If you are not comfortable with an
+always-streaming microphone on your network, device-side wake words exist for a reason.
+
+## What it runs in front of: Hermes
+
+In the house this was built for, the agent that answers is [Hermes Agent](https://github.com/NousResearch/hermes-agent) from Nous
+Research. The Assist pipeline's conversation agent is an OpenAI-compatible agent in Home Assistant
+that points at Hermes's [API server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server), so what you say
+is answered by an agent with its own persona, memory and tools, not by Home Assistant's built-in
+intent matcher. The voice is an ElevenLabs TTS entity in the same pipeline.
+
+```
+satellite audio -> listenrr (wake, capture, ASR) -> HA Assist (intent stage) -> Hermes -> ElevenLabs -> speaker
+```
+
+listenrr does not know about Hermes. It hands text to the pipeline and plays what comes back, so
+Hermes is simply what the pipeline calls. Any conversation agent Home Assistant supports works the
+same way. [`docs/home-assistant.md`](docs/home-assistant.md) has the wiring.
 
 ## How it works
 
@@ -57,6 +75,8 @@ flowchart LR
         ver[Verify gate]
     end
     ha[Home Assistant Assist pipeline, intent to TTS]
+    agent[Conversation agent: Hermes Agent]
+    ha <--> agent
     esp & tab & pi -->|16 kHz mono PCM| ring --> kws --> arb --> cap --> asr --> ver --> ha
     ha -->|TTS URL| esp
     ha -->|TTS URL| tab

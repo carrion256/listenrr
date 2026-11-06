@@ -45,6 +45,33 @@ sequenceDiagram
   conversation agent can resolve "the lights in here" to the right area. Set `device_id` on the
   `[[sources]]` entry (or `fallback_device_id` for a source with no device of its own).
 
+## Using Hermes as the conversation agent
+
+This is how the project's own house runs. [Hermes Agent](https://github.com/NousResearch/hermes-agent) exposes an
+[OpenAI-compatible API server](https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server), and the
+pipeline's conversation agent is a Home Assistant agent pointed at that endpoint.
+
+1. Run Hermes with its API server enabled. It requires an API key and refuses to start the
+   endpoint without one. Keep the endpoint on your LAN or behind a reverse proxy that limits who
+   can reach it.
+2. In Home Assistant, add an OpenAI-compatible conversation agent and give it Hermes's base URL
+   (the `/v1` root) and that key. Use an integration that accepts a custom base URL.
+3. In **Settings, Voice assistants**, set that agent as the conversation agent of the pipeline you
+   give listenrr in `ha.pipeline_id`. Set the pipeline's TTS to the voice you want (the author uses
+   an ElevenLabs entity).
+
+From then on, `assist_pipeline/run` from listenrr reaches Hermes with the transcript as the user
+message, and Hermes's reply is spoken. Because the agent keeps its own memory and tools, it can do
+more than Home Assistant's intents: answer questions, run tools and keep context between turns.
+The model Hermes uses is Hermes's own configuration and is invisible to listenrr.
+
+Two practical notes:
+
+- Voice replies should be short. Put that in the agent's persona or system prompt, because a long
+  answer is a long wait before the TTS audio exists.
+- An empty request is never sent. A bare wake word strips to nothing, and listenrr drops it before
+  the pipeline so the agent never sees an empty message.
+
 ## Steps
 
 ### 1. Pick or create the pipeline
